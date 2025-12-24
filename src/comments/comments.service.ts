@@ -98,4 +98,44 @@ export class CommentsService {
       return saved;
     });
   }
+
+  async createReply(params: {
+    commentId: number;
+    content: string;
+    authorId?: number;
+  }): Promise<CommentEntity> {
+    const content = (params.content ?? '').trim();
+    if (!content) {
+      throw new BadRequestException('content is required');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const parent = await this.repo.findCommentById(manager, params.commentId);
+      if (!parent) {
+        throw new NotFoundException('comment not found');
+      }
+
+      if (parent.isDeleted === 1) {
+        throw new BadRequestException('cannot reply to deleted comment');
+      }
+
+      const nowIso = new Date().toISOString();
+
+      const reply = new CommentEntity();
+      reply.articleId = parent.articleId;
+      reply.rootId = parent.rootId;
+      reply.parentId = parent.id;
+      reply.depth = parent.depth + 1;
+      reply.authorId = params.authorId ?? null;
+      reply.content = content;
+      reply.status = 1;
+      reply.isDeleted = 0;
+      reply.createdAt = nowIso;
+      reply.updatedAt = nowIso;
+
+      const saved = await this.repo.saveComment(manager, reply);
+      await this.repo.incrementArticleCommentCount(manager, parent.articleId, nowIso);
+      return saved;
+    });
+  }
 }

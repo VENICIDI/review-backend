@@ -158,4 +158,70 @@ describe('AppController (e2e)', () => {
 
     expect(list.body.items).toHaveLength(0);
   });
+
+  it('/comments/:commentId/replies (POST)', async () => {
+    const nowIso = new Date().toISOString();
+    const article = await dataSource.getRepository(ArticleEntity).save({
+      title: 't4',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      commentCount: 0,
+    });
+
+    const created = await request(app.getHttpServer())
+      .post(`/articles/${article.id}/comments`)
+      .send({ content: 'parent', authorId: 1 })
+      .expect(201);
+
+    const parentId = created.body.comment.id;
+
+    const res = await request(app.getHttpServer())
+      .post(`/comments/${parentId}/replies`)
+      .send({ content: 'child', authorId: 9 })
+      .expect(201);
+
+    expect(res.body).toHaveProperty('comment');
+    expect(res.body.comment).toMatchObject({
+      articleId: article.id,
+      parentId,
+      rootId: parentId,
+      depth: 1,
+      content: 'child',
+      authorId: 9,
+    });
+    expect(typeof res.body.comment.id).toBe('number');
+  });
+
+  it('/comments/:commentId/replies (POST) parent not found', async () => {
+    await request(app.getHttpServer())
+      .post(`/comments/999999/replies`)
+      .send({ content: 'child', authorId: 9 })
+      .expect(404);
+  });
+
+  it('/comments/:commentId/replies (POST) parent deleted not allowed', async () => {
+    const nowIso = new Date().toISOString();
+    const article = await dataSource.getRepository(ArticleEntity).save({
+      title: 't5',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      commentCount: 0,
+    });
+
+    const created = await request(app.getHttpServer())
+      .post(`/articles/${article.id}/comments`)
+      .send({ content: 'parent', authorId: 1 })
+      .expect(201);
+
+    const parentId = created.body.comment.id;
+
+    await request(app.getHttpServer()).delete(`/comments/${parentId}`).expect(204);
+
+    const res = await request(app.getHttpServer())
+      .post(`/comments/${parentId}/replies`)
+      .send({ content: 'child', authorId: 9 })
+      .expect(400);
+
+    expect(res.body?.message).toBe('cannot reply to deleted comment');
+  });
 });

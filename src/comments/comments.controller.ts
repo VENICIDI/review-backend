@@ -118,6 +118,29 @@ export class CommentsController {
     };
   }
 
+  @Post('/comments/:commentId/replies')
+  @HttpCode(HttpStatus.CREATED)
+  async createReply(
+    @Param('commentId', ParseIntPipe) commentId: number,
+    @Body() body: CreateCommentDto,
+  ) {
+    if (body?.authorId !== undefined && typeof body.authorId !== 'number') {
+      throw new BadRequestException('authorId must be a number');
+    }
+
+    const comment = await this.commentsService.createReply({
+      commentId,
+      content: body?.content,
+      authorId: body?.authorId,
+    });
+
+    return {
+      comment: {
+        ...this.formatComment(comment),
+      },
+    };
+  }
+
   @Delete('/comments/:commentId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async softDeleteComment(@Param('commentId', ParseIntPipe) commentId: number) {
