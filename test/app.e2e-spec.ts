@@ -6,6 +6,7 @@ import { AppModule } from './../src/app.module';
 import { DataSource } from 'typeorm';
 
 import { ArticleEntity } from './../src/entities/article.entity';
+import { CommentEntity } from './../src/entities/comment.entity';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -59,5 +60,76 @@ describe('AppController (e2e)', () => {
     });
     expect(typeof res.body.comment.id).toBe('number');
     expect(res.body.comment.rootId).toBe(res.body.comment.id);
+  });
+
+  it('/articles/:articleId/comments (GET) pagination', async () => {
+    const now = new Date();
+    const article = await dataSource.getRepository(ArticleEntity).save({
+      title: 't2',
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      commentCount: 0,
+    });
+
+    const commentsRepo = dataSource.getRepository(CommentEntity);
+    const c1 = await commentsRepo.save({
+      articleId: article.id,
+      rootId: 1,
+      parentId: null,
+      depth: 0,
+      authorId: 1,
+      content: 'c1',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 1).toISOString(),
+      updatedAt: new Date(now.getTime() + 1).toISOString(),
+    });
+    await commentsRepo.update({ id: c1.id }, { rootId: c1.id });
+
+    const c2 = await commentsRepo.save({
+      articleId: article.id,
+      rootId: 1,
+      parentId: null,
+      depth: 0,
+      authorId: 1,
+      content: 'c2',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 2).toISOString(),
+      updatedAt: new Date(now.getTime() + 2).toISOString(),
+    });
+    await commentsRepo.update({ id: c2.id }, { rootId: c2.id });
+
+    const c3 = await commentsRepo.save({
+      articleId: article.id,
+      rootId: 1,
+      parentId: null,
+      depth: 0,
+      authorId: 1,
+      content: 'c3',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 3).toISOString(),
+      updatedAt: new Date(now.getTime() + 3).toISOString(),
+    });
+    await commentsRepo.update({ id: c3.id }, { rootId: c3.id });
+
+    const page1 = await request(app.getHttpServer())
+      .get(`/articles/${article.id}/comments`)
+      .query({ limit: 2, order: 'asc' })
+      .expect(200);
+
+    expect(page1.body.items).toHaveLength(2);
+    expect(page1.body.items.map((x: any) => x.content)).toEqual(['c1', 'c2']);
+    expect(typeof page1.body.nextCursor).toBe('string');
+
+    const page2 = await request(app.getHttpServer())
+      .get(`/articles/${article.id}/comments`)
+      .query({ limit: 2, order: 'asc', cursor: page1.body.nextCursor })
+      .expect(200);
+
+    expect(page2.body.items).toHaveLength(1);
+    expect(page2.body.items[0].content).toBe('c3');
+    expect(page2.body.nextCursor).toBeUndefined();
   });
 });

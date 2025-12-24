@@ -11,6 +11,38 @@ export class CommentsService {
     private readonly repo: CommentsRepository,
   ) {}
 
+  async listTopLevelComments(params: {
+    articleId: number;
+    limit: number;
+    order: 'asc' | 'desc';
+    cursor?: { createdAt: string; id: number };
+  }): Promise<{ items: CommentEntity[]; nextCursor?: { createdAt: string; id: number } }> {
+    const limit = Math.min(Math.max(params.limit, 1), 100);
+
+    const article = await this.repo.findArticleById(this.dataSource.manager, params.articleId);
+    if (!article) {
+      throw new NotFoundException('article not found');
+    }
+
+    const rows = await this.repo.listTopLevelComments(this.dataSource.manager, {
+      articleId: params.articleId,
+      limit: limit + 1,
+      order: params.order,
+      cursor: params.cursor,
+    });
+
+    const items = rows.slice(0, limit);
+    const hasMore = rows.length > limit;
+    const nextCursor = hasMore
+      ? {
+          createdAt: items[items.length - 1].createdAt,
+          id: items[items.length - 1].id,
+        }
+      : undefined;
+
+    return { items, nextCursor };
+  }
+
   async createTopLevelComment(params: {
     articleId: number;
     content: string;
