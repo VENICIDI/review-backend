@@ -132,7 +132,7 @@ Hello World!
   - `400`：`limit` 非数字 / `order` 非 `asc|desc` / `cursor` 非法
   - `404`：文章不存在（`article not found`）
 
-### 2.1 分页获取文章的顶层评论（首屏预览：每条带最多 2 条子评论）
+### 2.1 分页获取文章的顶层评论（大多软件的首屏接口：每条带最多 2 条子评论，用于首屏展示）
 
 - **GET** `/articles/:articleId/comments/preview`
 - **Query**
