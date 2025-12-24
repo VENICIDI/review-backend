@@ -301,4 +301,93 @@ describe('AppController (e2e)', () => {
   it('/comments/:commentId/children (GET) parent not found', async () => {
     await request(app.getHttpServer()).get(`/comments/999999/children`).expect(404);
   });
+
+  it('/comments/:commentId/tree (GET) returns subtree', async () => {
+    const nowIso = new Date().toISOString();
+    const article = await dataSource.getRepository(ArticleEntity).save({
+      title: 't-tree-1',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      commentCount: 0,
+    });
+
+    const parentRes = await request(app.getHttpServer())
+      .post(`/articles/${article.id}/comments`)
+      .send({ content: 'parent', authorId: 1 })
+      .expect(201);
+    const parentId = parentRes.body.comment.id;
+
+    const child1Res = await request(app.getHttpServer())
+      .post(`/comments/${parentId}/replies`)
+      .send({ content: 'child1', authorId: 2 })
+      .expect(201);
+    const child1Id = child1Res.body.comment.id;
+
+    await request(app.getHttpServer())
+      .post(`/comments/${child1Id}/replies`)
+      .send({ content: 'grand1', authorId: 3 })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/comments/${parentId}/replies`)
+      .send({ content: 'child2', authorId: 4 })
+      .expect(201);
+
+    const treeRes = await request(app.getHttpServer()).get(`/comments/${parentId}/tree`).expect(200);
+
+    expect(treeRes.body).toHaveProperty('comment');
+    expect(treeRes.body.comment).toMatchObject({
+      id: parentId,
+      parentId: null,
+      rootId: parentId,
+      content: 'parent',
+    });
+    expect(Array.isArray(treeRes.body.comment.children)).toBe(true);
+    expect(treeRes.body.comment.children.map((x: any) => x.content)).toEqual(['child1', 'child2']);
+    expect(treeRes.body.comment.children[0].children).toHaveLength(1);
+    expect(treeRes.body.comment.children[0].children[0].content).toBe('grand1');
+  });
+
+  it('/comments/:commentId/tree (GET) keeps deleted node as placeholder', async () => {
+    const nowIso = new Date().toISOString();
+    const article = await dataSource.getRepository(ArticleEntity).save({
+      title: 't-tree-2',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      commentCount: 0,
+    });
+
+    const parentRes = await request(app.getHttpServer())
+      .post(`/articles/${article.id}/comments`)
+      .send({ content: 'parent', authorId: 1 })
+      .expect(201);
+    const parentId = parentRes.body.comment.id;
+
+    const childRes = await request(app.getHttpServer())
+      .post(`/comments/${parentId}/replies`)
+      .send({ content: 'child', authorId: 2 })
+      .expect(201);
+    const childId = childRes.body.comment.id;
+
+    await request(app.getHttpServer())
+      .post(`/comments/${childId}/replies`)
+      .send({ content: 'grand', authorId: 3 })
+      .expect(201);
+
+    await request(app.getHttpServer()).delete(`/comments/${childId}`).expect(204);
+
+    const treeRes = await request(app.getHttpServer()).get(`/comments/${parentId}/tree`).expect(200);
+    expect(treeRes.body.comment.children).toHaveLength(1);
+    expect(treeRes.body.comment.children[0]).toMatchObject({
+      id: childId,
+      isDeleted: 1,
+      content: '该评论已删除',
+    });
+    expect(treeRes.body.comment.children[0].children).toHaveLength(1);
+    expect(treeRes.body.comment.children[0].children[0].content).toBe('grand');
+  });
+
+  it('/comments/:commentId/tree (GET) comment not found', async () => {
+    await request(app.getHttpServer()).get(`/comments/999999/tree`).expect(404);
+  });
 });

@@ -14,6 +14,23 @@ export class CommentsRepository {
     return manager.getRepository(CommentEntity).findOne({ where: { id: commentId } });
   }
 
+  listByRootId(
+    manager: EntityManager,
+    params: {
+      articleId: number;
+      rootId: number;
+    },
+  ) {
+    return manager
+      .getRepository(CommentEntity)
+      .createQueryBuilder('c')
+      .where('c.articleId = :articleId', { articleId: params.articleId })
+      .andWhere('c.rootId = :rootId', { rootId: params.rootId })
+      .orderBy('c.createdAt', 'ASC')
+      .addOrderBy('c.id', 'ASC')
+      .getMany();
+  }
+
   listTopLevelComments(
     manager: EntityManager,
     params: {

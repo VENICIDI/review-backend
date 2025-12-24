@@ -158,20 +158,55 @@ Hello World!
   - `400`：`limit` 非数字 / `order` 非 `asc|desc` / `cursor` 非法
   - `404`：父评论不存在（`comment not found`）
 
-### 6. 软删除评论
+### 6. 获取某条评论的完整子树（一次拉取）
+
+- **GET** `/comments/:commentId/tree`
+- **Response 200**
+
+```json
+{
+  "comment": {
+    "id": 1,
+    "articleId": 1,
+    "rootId": 1,
+    "parentId": null,
+    "depth": 0,
+    "authorId": 9,
+    "content": "hello",
+    "status": 1,
+    "isDeleted": 0,
+    "createdAt": "2025-12-24T07:00:00Z",
+    "updatedAt": "2025-12-24T07:00:00Z",
+    "children": [
+      {
+        "id": 2,
+        "articleId": 1,
+        "rootId": 1,
+        "parentId": 1,
+        "depth": 1,
+        "authorId": 9,
+        "content": "reply",
+        "status": 1,
+        "isDeleted": 0,
+        "createdAt": "2025-12-24T07:01:00Z",
+        "updatedAt": "2025-12-24T07:01:00Z",
+        "children": []
+      }
+    ]
+  }
+}
+```
+
+- **说明**
+  - 返回以 `:commentId` 为根的子树（包含该评论本身）
+  - 子树节点按 `createdAt ASC, id ASC` 构建
+  - 已删除评论会返回 `content = 该评论已删除`
+- **可能错误**
+  - `404`：评论不存在（`comment not found`）
+
+### 7. 软删除评论
 
 - **DELETE** `/comments/:commentId`
 - **Response 204**（无 body）
 - **可能错误**
   - `404`：评论不存在（`comment not found`）
-
-## DESIGN.md 规划但尚未实现的接口
-
-- **GET** `/comments/:commentId/tree`（获取某条评论的完整子树，一次拉取）
-
-## 代码入口
-
-- `src/comments/comments.controller.ts`
-- `src/comments/comments.service.ts`
-- `src/comments/comments.repository.ts`
-- `test/app.e2e-spec.ts`

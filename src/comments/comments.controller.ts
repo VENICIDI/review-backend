@@ -47,6 +47,13 @@ export class CommentsController {
     };
   }
 
+  private formatCommentTree(node: any): any {
+    return {
+      ...this.formatComment(node),
+      children: Array.isArray(node.children) ? node.children.map((c: any) => this.formatCommentTree(c)) : [],
+    };
+  }
+
   @Get('/articles/:articleId/comments')
   async listTopLevelComments(
     @Param('articleId', ParseIntPipe) articleId: number,
@@ -92,6 +99,14 @@ export class CommentsController {
     return {
       items: res.items.map((comment) => this.formatComment(comment)),
       nextCursor,
+    };
+  }
+
+  @Get('/comments/:commentId/tree')
+  async getCommentTree(@Param('commentId', ParseIntPipe) commentId: number) {
+    const tree = await this.commentsService.getCommentTree(commentId);
+    return {
+      comment: this.formatCommentTree(tree),
     };
   }
 

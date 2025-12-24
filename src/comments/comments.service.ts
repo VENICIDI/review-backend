@@ -4,12 +4,49 @@ import { DataSource } from 'typeorm';
 import { CommentEntity } from '../entities/comment.entity';
 import { CommentsRepository } from './comments.repository';
 
+type CommentTreeNode = CommentEntity & { children: CommentTreeNode[] };
+
 @Injectable()
 export class CommentsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly repo: CommentsRepository,
   ) {}
+
+  async getCommentTree(commentId: number): Promise<CommentTreeNode> {
+    const target = await this.repo.findCommentById(this.dataSource.manager, commentId);
+    if (!target) {
+      throw new NotFoundException('comment not found');
+    }
+
+    const rows = await this.repo.listByRootId(this.dataSource.manager, {
+      articleId: target.articleId,
+      rootId: target.rootId,
+    });
+
+    const nodes = new Map<number, CommentTreeNode>();
+    for (const row of rows) {
+      nodes.set(row.id, { ...row, children: [] });
+    }
+
+    for (const node of nodes.values()) {
+      if (node.parentId === null) {
+        continue;
+      }
+      const parent = nodes.get(node.parentId);
+      if (!parent) {
+        continue;
+      }
+      parent.children.push(node);
+    }
+
+    const subtree = nodes.get(commentId);
+    if (!subtree) {
+      throw new NotFoundException('comment not found');
+    }
+
+    return subtree;
+  }
 
   async listTopLevelComments(params: {
     articleId: number;
