@@ -80,6 +80,74 @@ export class CommentsService {
     return { items, nextCursor };
   }
 
+  async listTopLevelCommentsWithPreviewChildren(params: {
+    articleId: number;
+    limit: number;
+    order: 'asc' | 'desc';
+    cursor?: { createdAt: string; id: number };
+    childLimitPerParent?: number;
+  }): Promise<{
+    items: Array<CommentEntity & { children: CommentEntity[] }>;
+    nextCursor?: { createdAt: string; id: number };
+  }> {
+    const limit = Math.min(Math.max(params.limit, 1), 100);
+    const childLimitPerParent = Math.min(Math.max(params.childLimitPerParent ?? 2, 0), 20);
+
+    const article = await this.repo.findArticleById(this.dataSource.manager, params.articleId);
+    if (!article) {
+      throw new NotFoundException('article not found');
+    }
+
+    const rows = await this.repo.listTopLevelComments(this.dataSource.manager, {
+      articleId: params.articleId,
+      limit: limit + 1,
+      order: params.order,
+      cursor: params.cursor,
+    });
+
+    const topLevel = rows.slice(0, limit);
+    const hasMore = rows.length > limit;
+    const nextCursor = hasMore
+      ? {
+          createdAt: topLevel[topLevel.length - 1].createdAt,
+          id: topLevel[topLevel.length - 1].id,
+        }
+      : undefined;
+
+    if (topLevel.length === 0 || childLimitPerParent === 0) {
+      return {
+        items: topLevel.map((c) => ({ ...c, children: [] })),
+        nextCursor,
+      };
+    }
+
+    const parentIds = topLevel.map((c) => c.id);
+    const childrenRows = await this.repo.listFirstNChildrenForParents(this.dataSource.manager, {
+      articleId: params.articleId,
+      parentIds,
+      limitPerParent: childLimitPerParent,
+      order: params.order,
+    });
+
+    const childrenByParentId = new Map<number, CommentEntity[]>();
+    for (const child of childrenRows) {
+      if (child.parentId === null) {
+        continue;
+      }
+      const arr = childrenByParentId.get(child.parentId) ?? [];
+      arr.push(child);
+      childrenByParentId.set(child.parentId, arr);
+    }
+
+    return {
+      items: topLevel.map((c) => ({
+        ...c,
+        children: childrenByParentId.get(c.id) ?? [],
+      })),
+      nextCursor,
+    };
+  }
+
   async softDeleteComment(commentId: number): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const comment = await this.repo.findCommentById(manager, commentId);

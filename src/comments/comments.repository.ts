@@ -73,6 +73,55 @@ export class CommentsRepository {
     return qb.getMany();
   }
 
+  async listFirstNChildrenForParents(
+    manager: EntityManager,
+    params: {
+      articleId: number;
+      parentIds: number[];
+      limitPerParent: number;
+      order: 'asc' | 'desc';
+    },
+  ) {
+    if (params.parentIds.length === 0 || params.limitPerParent <= 0) {
+      return [] as CommentEntity[];
+    }
+
+    const placeholders = params.parentIds.map(() => '?').join(',');
+    const direction = params.order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    const sql = `
+      SELECT
+        id as id,
+        article_id as articleId,
+        root_id as rootId,
+        parent_id as parentId,
+        depth as depth,
+        author_id as authorId,
+        content as content,
+        status as status,
+        is_deleted as isDeleted,
+        created_at as createdAt,
+        updated_at as updatedAt
+      FROM (
+        SELECT
+          c.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY c.parent_id
+            ORDER BY c.created_at ${direction}, c.id ${direction}
+          ) AS rn
+        FROM comments c
+        WHERE c.article_id = ?
+          AND c.parent_id IN (${placeholders})
+          AND c.is_deleted = 0
+      ) t
+      WHERE t.rn <= ?
+      ORDER BY t.parent_id ASC, t.created_at ${direction}, t.id ${direction}
+    `;
+
+    const rawRows = await manager.query(sql, [params.articleId, ...params.parentIds, params.limitPerParent]);
+    return rawRows as CommentEntity[];
+  }
+
   listChildren(
     manager: EntityManager,
     params: {

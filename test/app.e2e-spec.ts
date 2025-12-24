@@ -133,6 +133,111 @@ describe('AppController (e2e)', () => {
     expect(page2.body.nextCursor).toBeUndefined();
   });
 
+  it('/articles/:articleId/comments/preview (GET) returns top level with up to 2 children each', async () => {
+    const now = new Date();
+    const article = await dataSource.getRepository(ArticleEntity).save({
+      title: 't-preview-1',
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      commentCount: 0,
+    });
+
+    const commentsRepo = dataSource.getRepository(CommentEntity);
+    const p1 = await commentsRepo.save({
+      articleId: article.id,
+      rootId: 1,
+      parentId: null,
+      depth: 0,
+      authorId: 1,
+      content: 'p1',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 10).toISOString(),
+      updatedAt: new Date(now.getTime() + 10).toISOString(),
+    });
+    await commentsRepo.update({ id: p1.id }, { rootId: p1.id });
+
+    const p2 = await commentsRepo.save({
+      articleId: article.id,
+      rootId: 1,
+      parentId: null,
+      depth: 0,
+      authorId: 1,
+      content: 'p2',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 20).toISOString(),
+      updatedAt: new Date(now.getTime() + 20).toISOString(),
+    });
+    await commentsRepo.update({ id: p2.id }, { rootId: p2.id });
+
+    await commentsRepo.save({
+      articleId: article.id,
+      rootId: p1.id,
+      parentId: p1.id,
+      depth: 1,
+      authorId: 2,
+      content: 'p1-ch1',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 11).toISOString(),
+      updatedAt: new Date(now.getTime() + 11).toISOString(),
+    });
+    await commentsRepo.save({
+      articleId: article.id,
+      rootId: p1.id,
+      parentId: p1.id,
+      depth: 1,
+      authorId: 2,
+      content: 'p1-ch2',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 12).toISOString(),
+      updatedAt: new Date(now.getTime() + 12).toISOString(),
+    });
+    await commentsRepo.save({
+      articleId: article.id,
+      rootId: p1.id,
+      parentId: p1.id,
+      depth: 1,
+      authorId: 2,
+      content: 'p1-ch3',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 13).toISOString(),
+      updatedAt: new Date(now.getTime() + 13).toISOString(),
+    });
+
+    await commentsRepo.save({
+      articleId: article.id,
+      rootId: p2.id,
+      parentId: p2.id,
+      depth: 1,
+      authorId: 3,
+      content: 'p2-ch1',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 21).toISOString(),
+      updatedAt: new Date(now.getTime() + 21).toISOString(),
+    });
+
+    const res = await request(app.getHttpServer())
+      .get(`/articles/${article.id}/comments/preview`)
+      .query({ limit: 10, order: 'asc' })
+      .expect(200);
+
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.items.map((x: any) => x.content)).toEqual(['p1', 'p2']);
+
+    const item1 = res.body.items.find((x: any) => x.content === 'p1');
+    expect(item1.children).toHaveLength(2);
+    expect(item1.children.map((x: any) => x.content)).toEqual(['p1-ch1', 'p1-ch2']);
+
+    const item2 = res.body.items.find((x: any) => x.content === 'p2');
+    expect(item2.children).toHaveLength(1);
+    expect(item2.children[0].content).toBe('p2-ch1');
+  });
+
   it('/comments/:commentId (DELETE) soft delete', async () => {
     const nowIso = new Date().toISOString();
     const article = await dataSource.getRepository(ArticleEntity).save({

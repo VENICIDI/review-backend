@@ -54,6 +54,13 @@ export class CommentsController {
     };
   }
 
+  private formatCommentWithChildren(node: any): any {
+    return {
+      ...this.formatComment(node),
+      children: Array.isArray(node.children) ? node.children.map((c: any) => this.formatComment(c)) : [],
+    };
+  }
+
   @Get('/articles/:articleId/comments')
   async listTopLevelComments(
     @Param('articleId', ParseIntPipe) articleId: number,
@@ -98,6 +105,55 @@ export class CommentsController {
 
     return {
       items: res.items.map((comment) => this.formatComment(comment)),
+      nextCursor,
+    };
+  }
+
+  @Get('/articles/:articleId/comments/preview')
+  async listTopLevelCommentsWithPreviewChildren(
+    @Param('articleId', ParseIntPipe) articleId: number,
+    @Query('limit') limitRaw?: string,
+    @Query('order') orderRaw?: string,
+    @Query('cursor') cursorRaw?: string,
+  ) {
+    const limit = limitRaw === undefined ? 20 : Number(limitRaw);
+    if (!Number.isFinite(limit)) {
+      throw new BadRequestException('limit must be a number');
+    }
+
+    const order = (orderRaw ?? 'desc').toLowerCase();
+    if (order !== 'asc' && order !== 'desc') {
+      throw new BadRequestException('order must be asc or desc');
+    }
+
+    let cursor: { createdAt: string; id: number } | undefined;
+    if (cursorRaw) {
+      try {
+        const json = Buffer.from(cursorRaw, 'base64url').toString('utf8');
+        const parsed = JSON.parse(json);
+        if (!parsed || typeof parsed.createdAt !== 'string' || typeof parsed.id !== 'number') {
+          throw new Error('invalid cursor');
+        }
+        cursor = { createdAt: parsed.createdAt, id: parsed.id };
+      } catch {
+        throw new BadRequestException('cursor is invalid');
+      }
+    }
+
+    const res = await this.commentsService.listTopLevelCommentsWithPreviewChildren({
+      articleId,
+      limit,
+      order,
+      cursor,
+      childLimitPerParent: 2,
+    });
+
+    const nextCursor = res.nextCursor
+      ? Buffer.from(JSON.stringify(res.nextCursor), 'utf8').toString('base64url')
+      : undefined;
+
+    return {
+      items: res.items.map((comment) => this.formatCommentWithChildren(comment)),
       nextCursor,
     };
   }
