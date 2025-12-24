@@ -166,7 +166,7 @@ ORDER BY created_at ASC;
 
 软删除返回约定（推荐）：
 
-- `isDeleted=1` 时 `content` 返回空串或固定占位文案。
+- `isDeleted=1` 时 `content` 返回固定占位文案 `"该评论已删除"`。
 
 ### 2.2 创建评论 / 回复
 
