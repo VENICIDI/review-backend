@@ -132,4 +132,30 @@ describe('AppController (e2e)', () => {
     expect(page2.body.items[0].content).toBe('c3');
     expect(page2.body.nextCursor).toBeUndefined();
   });
+
+  it('/comments/:commentId (DELETE) soft delete', async () => {
+    const nowIso = new Date().toISOString();
+    const article = await dataSource.getRepository(ArticleEntity).save({
+      title: 't3',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      commentCount: 0,
+    });
+
+    const created = await request(app.getHttpServer())
+      .post(`/articles/${article.id}/comments`)
+      .send({ content: 'to-delete', authorId: 1 })
+      .expect(201);
+
+    const commentId = created.body.comment.id;
+
+    await request(app.getHttpServer()).delete(`/comments/${commentId}`).expect(204);
+
+    const list = await request(app.getHttpServer())
+      .get(`/articles/${article.id}/comments`)
+      .query({ limit: 20, order: 'asc' })
+      .expect(200);
+
+    expect(list.body.items).toHaveLength(0);
+  });
 });

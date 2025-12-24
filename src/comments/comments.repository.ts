@@ -10,6 +10,10 @@ export class CommentsRepository {
     return manager.getRepository(ArticleEntity).findOne({ where: { id: articleId } });
   }
 
+  findCommentById(manager: EntityManager, commentId: number) {
+    return manager.getRepository(CommentEntity).findOne({ where: { id: commentId } });
+  }
+
   listTopLevelComments(
     manager: EntityManager,
     params: {
@@ -23,7 +27,8 @@ export class CommentsRepository {
       .getRepository(CommentEntity)
       .createQueryBuilder('c')
       .where('c.articleId = :articleId', { articleId: params.articleId })
-      .andWhere('c.parentId IS NULL');
+      .andWhere('c.parentId IS NULL')
+      .andWhere('c.isDeleted = 0');
 
     if (params.cursor) {
       if (params.order === 'desc') {
@@ -53,6 +58,12 @@ export class CommentsRepository {
 
   saveComment(manager: EntityManager, comment: CommentEntity) {
     return manager.getRepository(CommentEntity).save(comment);
+  }
+
+  softDeleteComment(manager: EntityManager, commentId: number, nowIso: string) {
+    return manager
+      .getRepository(CommentEntity)
+      .update({ id: commentId }, { isDeleted: 1, updatedAt: nowIso });
   }
 
   updateCommentRootId(manager: EntityManager, commentId: number, rootId: number) {

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -17,6 +18,34 @@ import { CommentsService } from './comments.service';
 @Controller()
 export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
+
+  private formatComment(comment: {
+    id: number;
+    articleId: number;
+    rootId: number;
+    parentId: number | null;
+    depth: number;
+    authorId: number | null;
+    content: string;
+    status: number;
+    isDeleted: number;
+    createdAt: string;
+    updatedAt: string;
+  }) {
+    return {
+      id: comment.id,
+      articleId: comment.articleId,
+      rootId: comment.rootId,
+      parentId: comment.parentId,
+      depth: comment.depth,
+      authorId: comment.authorId,
+      content: comment.isDeleted === 1 ? '该评论已删除' : comment.content,
+      status: comment.status,
+      isDeleted: comment.isDeleted,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+    };
+  }
 
   @Get('/articles/:articleId/comments')
   async listTopLevelComments(
@@ -61,19 +90,7 @@ export class CommentsController {
       : undefined;
 
     return {
-      items: res.items.map((comment) => ({
-        id: comment.id,
-        articleId: comment.articleId,
-        rootId: comment.rootId,
-        parentId: comment.parentId,
-        depth: comment.depth,
-        authorId: comment.authorId,
-        content: comment.content,
-        status: comment.status,
-        isDeleted: comment.isDeleted,
-        createdAt: comment.createdAt,
-        updatedAt: comment.updatedAt,
-      })),
+      items: res.items.map((comment) => this.formatComment(comment)),
       nextCursor,
     };
   }
@@ -96,18 +113,14 @@ export class CommentsController {
 
     return {
       comment: {
-        id: comment.id,
-        articleId: comment.articleId,
-        rootId: comment.rootId,
-        parentId: comment.parentId,
-        depth: comment.depth,
-        authorId: comment.authorId,
-        content: comment.content,
-        status: comment.status,
-        isDeleted: comment.isDeleted,
-        createdAt: comment.createdAt,
-        updatedAt: comment.updatedAt,
+        ...this.formatComment(comment),
       },
     };
+  }
+
+  @Delete('/comments/:commentId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async softDeleteComment(@Param('commentId', ParseIntPipe) commentId: number) {
+    await this.commentsService.softDeleteComment(commentId);
   }
 }

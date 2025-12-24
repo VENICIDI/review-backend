@@ -43,6 +43,22 @@ export class CommentsService {
     return { items, nextCursor };
   }
 
+  async softDeleteComment(commentId: number): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const comment = await this.repo.findCommentById(manager, commentId);
+      if (!comment) {
+        throw new NotFoundException('comment not found');
+      }
+
+      if (comment.isDeleted === 1) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      await this.repo.softDeleteComment(manager, commentId, nowIso);
+    });
+  }
+
   async createTopLevelComment(params: {
     articleId: number;
     content: string;
