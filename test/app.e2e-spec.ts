@@ -224,4 +224,81 @@ describe('AppController (e2e)', () => {
 
     expect(res.body?.message).toBe('cannot reply to deleted comment');
   });
+
+  it('/comments/:commentId/children (GET) pagination', async () => {
+    const now = new Date();
+    const article = await dataSource.getRepository(ArticleEntity).save({
+      title: 't6',
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      commentCount: 0,
+    });
+
+    const parentRes = await request(app.getHttpServer())
+      .post(`/articles/${article.id}/comments`)
+      .send({ content: 'parent', authorId: 1 })
+      .expect(201);
+
+    const parentId = parentRes.body.comment.id;
+
+    const commentsRepo = dataSource.getRepository(CommentEntity);
+    await commentsRepo.save({
+      articleId: article.id,
+      rootId: parentId,
+      parentId,
+      depth: 1,
+      authorId: 1,
+      content: 'ch1',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 1).toISOString(),
+      updatedAt: new Date(now.getTime() + 1).toISOString(),
+    });
+    await commentsRepo.save({
+      articleId: article.id,
+      rootId: parentId,
+      parentId,
+      depth: 1,
+      authorId: 1,
+      content: 'ch2',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 2).toISOString(),
+      updatedAt: new Date(now.getTime() + 2).toISOString(),
+    });
+    await commentsRepo.save({
+      articleId: article.id,
+      rootId: parentId,
+      parentId,
+      depth: 1,
+      authorId: 1,
+      content: 'ch3',
+      status: 1,
+      isDeleted: 0,
+      createdAt: new Date(now.getTime() + 3).toISOString(),
+      updatedAt: new Date(now.getTime() + 3).toISOString(),
+    });
+
+    const page1 = await request(app.getHttpServer())
+      .get(`/comments/${parentId}/children`)
+      .query({ limit: 2, order: 'asc' })
+      .expect(200);
+
+    expect(page1.body.items).toHaveLength(2);
+    expect(page1.body.items.map((x: any) => x.content)).toEqual(['ch1', 'ch2']);
+    expect(typeof page1.body.nextCursor).toBe('string');
+
+    const page2 = await request(app.getHttpServer())
+      .get(`/comments/${parentId}/children`)
+      .query({ limit: 2, order: 'asc', cursor: page1.body.nextCursor })
+      .expect(200);
+
+    expect(page2.body.items).toHaveLength(1);
+    expect(page2.body.items[0].content).toBe('ch3');
+    expect(page2.body.nextCursor).toBeUndefined();
+  });
+
+  it('/comments/:commentId/children (GET) parent not found', async () => {
+    await request(app.getHttpServer()).get(`/comments/999999/children`).expect(404);
+  });
 });

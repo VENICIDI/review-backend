@@ -56,6 +56,49 @@ export class CommentsRepository {
     return qb.getMany();
   }
 
+  listChildren(
+    manager: EntityManager,
+    params: {
+      articleId: number;
+      parentId: number;
+      limit: number;
+      order: 'asc' | 'desc';
+      cursor?: { createdAt: string; id: number };
+    },
+  ) {
+    const qb = manager
+      .getRepository(CommentEntity)
+      .createQueryBuilder('c')
+      .where('c.articleId = :articleId', { articleId: params.articleId })
+      .andWhere('c.parentId = :parentId', { parentId: params.parentId })
+      .andWhere('c.isDeleted = 0');
+
+    if (params.cursor) {
+      if (params.order === 'desc') {
+        qb.andWhere(
+          '(c.createdAt < :cursorCreatedAt OR (c.createdAt = :cursorCreatedAt AND c.id < :cursorId))',
+          {
+            cursorCreatedAt: params.cursor.createdAt,
+            cursorId: params.cursor.id,
+          },
+        );
+      } else {
+        qb.andWhere(
+          '(c.createdAt > :cursorCreatedAt OR (c.createdAt = :cursorCreatedAt AND c.id > :cursorId))',
+          {
+            cursorCreatedAt: params.cursor.createdAt,
+            cursorId: params.cursor.id,
+          },
+        );
+      }
+    }
+
+    const direction = params.order.toUpperCase() as 'ASC' | 'DESC';
+    qb.orderBy('c.createdAt', direction).addOrderBy('c.id', direction).take(params.limit);
+
+    return qb.getMany();
+  }
+
   saveComment(manager: EntityManager, comment: CommentEntity) {
     return manager.getRepository(CommentEntity).save(comment);
   }

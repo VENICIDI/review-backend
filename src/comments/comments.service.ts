@@ -59,6 +59,39 @@ export class CommentsService {
     });
   }
 
+  async listChildren(params: {
+    commentId: number;
+    limit: number;
+    order: 'asc' | 'desc';
+    cursor?: { createdAt: string; id: number };
+  }): Promise<{ items: CommentEntity[]; nextCursor?: { createdAt: string; id: number } }> {
+    const limit = Math.min(Math.max(params.limit, 1), 100);
+
+    const parent = await this.repo.findCommentById(this.dataSource.manager, params.commentId);
+    if (!parent) {
+      throw new NotFoundException('comment not found');
+    }
+
+    const rows = await this.repo.listChildren(this.dataSource.manager, {
+      articleId: parent.articleId,
+      parentId: parent.id,
+      limit: limit + 1,
+      order: params.order,
+      cursor: params.cursor,
+    });
+
+    const items = rows.slice(0, limit);
+    const hasMore = rows.length > limit;
+    const nextCursor = hasMore
+      ? {
+          createdAt: items[items.length - 1].createdAt,
+          id: items[items.length - 1].id,
+        }
+      : undefined;
+
+    return { items, nextCursor };
+  }
+
   async createTopLevelComment(params: {
     articleId: number;
     content: string;
